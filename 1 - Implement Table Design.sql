@@ -2,11 +2,12 @@
 
 -- Step 1: Open a new query window to tempdb
 
-USE tempdb;
+USE demodb;
 GO
 
 -- Step 2: Create the Customer and CustomerOrder tables
 --         and populate them
+
 
 CREATE TABLE dbo.Customer
 (
@@ -61,7 +62,7 @@ GO
 --         when constraints are not named.
 
 ALTER TABLE dbo.CustomerOrder
-  DROP CONSTRAINT FK__CustomerO__Custo__66603565;
+  DROP CONSTRAINT FK__CustomerO__Custo__1273C1CD;
 GO
 
 ALTER TABLE dbo.CustomerOrder

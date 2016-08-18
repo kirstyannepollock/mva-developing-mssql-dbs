@@ -2,7 +2,7 @@
 
 -- Step 1: Open a query window to the tempdb database
 
-USE tempdb;
+USE demodb;
 GO
 
 -- Step 2: Create a schema
@@ -35,9 +35,12 @@ GO
 --         statement separately
 
 CREATE SCHEMA Operations AUTHORIZATION dbo
+GO
+
 CREATE TABLE Flights (FlightID int IDENTITY(1,1) PRIMARY KEY,
                       Origin nvarchar(3),
                       Destination nvarchar(3));
+
 
 -- Step 8: Again, use object explorer to work out which schema 
 --         the table has been created in

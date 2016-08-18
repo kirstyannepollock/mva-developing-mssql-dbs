@@ -1,0 +1,30 @@
+----------------------------------------------------Filegroups - Best practice: 
+----------------------------------------------------
+Use primary only for metatables, define own for actual data and make default. (recovery easier).
+
+====================================================
+Schemas
+====================================================
+Idea - Dev, prod. Schema level access 
+("GRANT EXECUTE ON SCHEMA::Sales" )
+
+----------------------------------------------------
+Schemas listed under "Security" in Object Explorer.
+----------------------------------------------------
+
+----------------------------------------------------
+Schema and table creation as one transaction/batch. (2014)
+----------------------------------------------------
+e.g.
+
+"CREATE SCHEMA Operations AUTHORIZATION dbo
+CREATE TABLE Flights ... "
+
+creates Operations.Flights but
+
+"CREATE SCHEMA Operations AUTHORIZATION dbo
+GO
+
+CREATE TABLE Flights ... "
+
+creates dbo.Flights (assuming "dbo" is the default schema)
