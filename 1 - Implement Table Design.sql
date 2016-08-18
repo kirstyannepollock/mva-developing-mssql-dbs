@@ -15,6 +15,7 @@ CREATE TABLE dbo.Customer
 	CustomerName nvarchar(50) NOT NULL
 );
 GO
+
 INSERT dbo.Customer
   VALUES ('Marcin Jankowski'),('Darcy Jayne');
 GO
