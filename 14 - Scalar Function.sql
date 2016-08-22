@@ -40,3 +40,4 @@ GO
 DROP FUNCTION dbo.EndOfPreviousMonth;
 GO
 
+select DATEADD(month, -1, EOMONTH(SYSDATETIME()))

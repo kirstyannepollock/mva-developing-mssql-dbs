@@ -61,6 +61,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="notes\Important Notes.txt" />
+    <None Include="6 - Partitioning KP.sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="1 - Implement Table Design.sql" />

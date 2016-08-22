@@ -1,5 +1,14 @@
-----------------------------------------------------Filegroups - Best practice: 
-----------------------------------------------------
+====================================================
+Fully qualify things with schema
+====================================================
+dbo.users
+sales.Orders
+sales.p_TopSellers (p_ or usp_)
+
+Much more efficient, optimiser doesn't have to check default schema.
+
+====================================================Filegroups - Best practice: 
+====================================================
 Use primary only for metatables, define own for actual data and make default. (recovery easier).
 
 ====================================================
@@ -28,3 +37,227 @@ GO
 CREATE TABLE Flights ... "
 
 creates dbo.Flights (assuming "dbo" is the default schema)
+
+
+====================================================
+Views
+====================================================
+
+Create WITH SCHEMABINDING - prevents table structure changes (error message)
+----------------------------------------------------
+
+Add unique clustered index makes it a "table" - persists in its own right. (enterprise version optimizer ONLY will use them).
+
+====================================================
+Tables
+====================================================
+----------------------------------------------------
+Temp tables
+----------------------------------------------------
+Temporary tables # - scope session, db keeps/updates stats - extra overhead (recompiltiation).
+
+Table variables - scope batch, no stats (est 1 row) - small datasets OK, bigger not great...
+
+----------------------------------------------------
+Partitioned tables
+----------------------------------------------------
+Split table across seperate filegroups (eg. by year).
+Indexes are aligned (i.e. partitioned).
+
+-- 3 cuts, 4 pieces:up to 2000, 2001, 2002, after 2002
+-- RIGHT means put boundary value in right hand partition
+CREATE PARTITION FUNCTION PF (int) AS RANGE RIGHT FOR VALUES (20000101, 20010101, 20020101);
+
+-- ... and 5 filegroups because we specify the next -- in case we make a new partition later...
+CREATE PARTITION SCHEME PS AS PARTITION PF TO (FG0000, FG2000, FG2001, FG2002, FG2003);
+
+CREATE TABLE dbo.order_table
+ (datekey int, amount int)
+ON PS(datekey);
+
+-- Split the partition at the end to add a new -- partition for 2003 onwards
+ALTER PARTITION FUNCTION PF() 
+SPLIT RANGE(20030101);
+
+
+-- merge pre-2000 and 2001 orders
+-- basically, remove the 2000 "cut point"
+ALTER PARTITION FUNCTION PF() 
+MERGE RANGE(20000101);
+
+-- SWITCH (archive). Have to be on same filegroup.
+ALTER TABLE Sales.Order
+SWITCH PARTITION $PARTITION.PF(20000101)
+TO archive_table;
+----------------------------------------------------
+
+====================================================
+Indexes
+====================================================
+Heap = table with no clustered index.
+
+Non-clustered index on heap - leaf nodes: contain keys; point to RIDs (row id on data pages).
+
+Non-clustered index on (table with) clustered index - leaf nodes: contain key; point to the clustered index. (the actual table, in effect, index pages contain data on a (table with) clustered index).
+
+----------------------------------------------------
+Covering Indexes
+----------------------------------------------------
+INCLUDE (2005+) inserts column data into the leaf node of a non-clustered index. (eg index on last name but include first name)
+
+----------------------------------------------------
+DMVs (Data Management Views)
+----------------------------------------------------
+
+sys.dm_db_<whatever>
+
+index_level: leaf = 0. Intermediates 1+
+
+http://blog.sqlauthority.com/2010/07/04/sql-server-index-levels-page-count-record-count-and-dmv-%C2%A0sys-dm_db_index_physical_stats/
+
+Use sys.dm_db_index_operational_stats to find unused indexes. (See Index Information.sql for query). 
+
+!!!BUT!!! unique index may exist purely as constraint and IS used by optimiser (means it doesn't need to check the col val is uinque). 
+
+----------------------------------------------------
+Filtered index (non-clustered index)
+----------------------------------------------------
+Just add a WHERE clause (e.g. just yesterday's orders).
+
+Cheaper than Indexed View.
+
+
+----------------------------------------------------
+FILLFACTOR and PAD_INDEX
+----------------------------------------------------
+
+FILLFACTOR on leaf pages
+PAD_INDEX on index pages
+
+<index def>
+WITH (PAD_INDEX = ON , FILLFACTOR = 70)
+
+less page spilts, BUT greater storage space / less 
+efficient.
+
+----------------------------------------------------
+REBUILD and REORGANIZE 
+----------------------------------------------------ALTER INDEX ... REBUILD
+
+takes table offline, needs space, single tran, tran log etc. [Enterprise can do (ONLINE = ON ...) lots of overheads ]
+
+ALTER INDEX ... REORGANIZE = "defrag". Not single tran. Can "defrag " a bit at a time.
+
+----------------------------------------------------
+dbcc show_statistics (<table>.<stat_name> )
+----------------------------------------------------
+auto update statistics
+or manual UPDATE STATISTICS / sp_updatestats
+ALTER INDEX REBUILD also updates stats
+
+====================================================
+Stored Procs
+====================================================
+KISS (resue of exec plans)
+
+----------------------------------------------------
+Lumpy Data
+----------------------------------------------------
+Optimise for (when you know the most likely)
+DBCC FREEPROCCACHE - clear proc exec plans
+
+e.g. tack OPTION (OPTIMIZE FOR (@country = 'UK') )
+onto the query (statement level).
+
+better than EXEC or CREATE/ALTER with OPTION(RECOMPILE)
+
+BUT we can use Statement level OPTION (RECOMPILE), rather than the whole stored proc.
+
+====================================================
+Functions
+====================================================
+No exec plan resue.
+
+----------------------------------------------------
+Can't have side-effects 
+----------------------------------------------------
+i.e. can't alter database/data in any way outside own scope . see https://msdn.microsoft.com/en-us/library/ms191007.aspx
+
+----------------------------------------------------
+Non-deterministic 
+----------------------------------------------------
+n-d UDFs can't be used in indexed views.
+
+You can't use RAND, NEWID, NEWSEQUNTIALID, TXTPTR in a fn.
+
+can declare WITH SCHEMABINDING (In fact SQL Server with consider it non-d if you don't!)
+----------------------------------------------------
+
+CROSS APPLY for Table Valued Functions (where I'd probably have used a non-recursive CTE...)
+
+CREATE FUNCTION Sales.GetLastOrdersForCustomer 
+(@CustomerID int, @NumberOfOrders int)
+RETURNS TABLE 
+AS ...
+
+SELECT c.CustomerID,
+             c.AccountNumber,
+             glofc.SalesOrderID,
+             glofc.OrderDate 
+FROM Sales.Customer AS c
+CROSS APPLY Sales.GetLastOrdersForCustomer(c.CustomerID,3) AS glofc
+ORDER BY c.CustomerID,glofc.SalesOrderID;
+
+====================================================
+Transactions
+====================================================
+----------------------------------------------------
+Isolation Levels
+----------------------------------------------------
+Read Uncommitted (no locks) = dirty reads, phantoms, nr-reads.
+Read Committed [DEFAULT] (shared lock) = nrr, phantoms.
+(wait til others finish writing)
+Repeatable Read (lock, not shared) = phantoms.
+Serializable (full lock, no inserts). 
+Snapshot (2005+ optimistic) used row versions not locks. When update actually occurs, can still get thrown into rollback.
+
+----------------------------------------------------
+Locking
+----------------------------------------------------
+Shared or Exclusive
+
+Shared for Read, Exclusive for Write.
+Update (anti deadlock, auto)
+Intent Shared, Intent Exclusive etc, on row(key), page, table - block requests for exclusive locks
+
+Blocking locks (normal, treatment scenario dependent)
+Deadlocks (auto [kills cheapest to rollback], but usual stuff to prevent, handle where expected)
+
+----------------------------------------------------
+Useful sps
+----------------------------------------------------
+sys.dm_tran_locks
+sys.dm_os_waiting_tasks
+sp_readerrorlog
+
+----------------------------------------------------
+Profiler: deadlock graphs
+----------------------------------------------------
+
+----------------------------------------------------
+Trace flags
+----------------------------------------------------
+1204, 1222 DBCC TRACEON(1222,-1) (add to sqlserver startup cmd)
+
+====================================================
+In_memory (2014+)
+====================================================
+----------------------------------------------------
+Buffer Pool Extension
+----------------------------------------------------
+----------------------------------------------------
+Columnstore Indexes
+----------------------------------------------------
+----------------------------------------------------
+In-Memory OLTP
+----------------------------------------------------
