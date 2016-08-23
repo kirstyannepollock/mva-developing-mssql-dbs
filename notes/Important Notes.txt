@@ -248,16 +248,68 @@ Profiler: deadlock graphs
 Trace flags
 ----------------------------------------------------
 1204, 1222 DBCC TRACEON(1222,-1) (add to sqlserver startup cmd)
+----------------------------------------------------
+
+----------------------------------------------------
+useful!
+----------------------------------------------------
+SET STATISTICS TIME ON;
+SET STATISTICS IO ON;
 
 ====================================================
-In_memory (2014+)
+In-memory (2014+)
 ====================================================
 ----------------------------------------------------
 Buffer Pool Extension
 ----------------------------------------------------
+Extend buffer cache (swap/page file) to SSDs (normally). 
+Improves performance for read-heavy stuff.
+Available on Standard!!
+Cheaper than extra memory (esp virtually - dep pricing).
+Clean pages only (so if device fails/drops - no loss).
+
 ----------------------------------------------------
 Columnstore Indexes
 ----------------------------------------------------
+In-memory. kinda a pivot. For reporting,  denorm data, wide tables, subset columns.  
+Good for: 
+  Data warehousing (star, snowflake). 
+  Where data suitable for compression (e.g. denorm).   Large no. of rows.
+
+Pages are still 8k. so this works better in above scenario.
+
+Compressed.
+
+Allows aggregation on the fly.
+
+2014+ allows clustered indexes therefore updatable.
+
 ----------------------------------------------------
-In-Memory OLTP
+In-Memory OLTP (Hekaton)
 ----------------------------------------------------
+Memory-optimised tables (C structs in DLLs)
+  Filestream; no locking (Snapshot isolation level); hash indexes; co-exists with disk tables, queryable
+
+BUT!!!! no IDENTITY columns or FKS!!!!
+
+(Kirsty says WTF?? Stop trying to follow shitty "Big Data" fashion. But at least SQL!)
+
+Uses: Apps with high concurrency + large number of rows, high use of specific pages ("hot" pages). Massive scale - where latching has become an issue.
+
+range index: better for range queries than hash
+
+----------------------------------------------------
+Natively compiled stored procs
+----------------------------------------------------
+Can only access in-memory tables.
+MUCH MUCH quicker than normal interpreted stored procs.
+
+====================================================
+Performance
+====================================================
+Normal shit plus ...
+
+Make sure to use identical data types for variables and fields (avoids type conversions)
+
+Avoid scalar UDFs in WHERE (can't optimise)
+
